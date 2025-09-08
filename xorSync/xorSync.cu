@@ -7,46 +7,46 @@
 #include <cuda/barrier>
 
 #define ITERS 1000000
-#define THREADS_PER_BLOCK 256
+#define THREADS_PER_BLOCK 32
 
-//__device__ cuda::barrier<cuda::thread_scope_system> B(TOTAL_THREADS);
 namespace cg = cooperative_groups;
 
-__global__ void xorShift(int *R, int fpt) {
+__global__ void xorShift(int *R, int lg_fptf) {
     int x = threadIdx.x;
     int y = blockIdx.x;
     int z = threadIdx.x + 1;
     cg::grid_group g = cg::this_grid();
     volatile int w = blockDim.x - threadIdx.x;
     for (int j = 0; j < ITERS; j++) {
+        int tmp=(x^(x<<15));  
+        int fpt=(((w^(w>>21))^(tmp^(tmp>>4))) & 31) << lg_fptf; 
         for (int i = 0; i < fpt; i++) {
-            int tmp=(x^(x<<15)); x=y; y=z; z=w;  
+            tmp=(x^(x<<15)); x=y; y=z; z=w;  
             w=(w^(w>>21))^(tmp^(tmp>>4)); 
         }
-        //B.arrive_and_wait();
         g.sync();
     }
-    //R[blockIdx.x * blockDim.x + threadIdx.x] = w;
 } 
 
-__global__ void xorShiftNoSync(int *R, int fpt) {
+__global__ void xorShiftNoSync(int *R, int lg_fptf) {
     int x = threadIdx.x;
     int y = blockIdx.x;
     int z = threadIdx.x + 1;
-    volatile int w = blockDim.x - threadIdx.x;
+    volatile uint32_t w = blockDim.x - threadIdx.x;
     for (int j = 0; j < ITERS; j++) {
+        int tmp=(x^(x<<15));
+        int fpt=(((w^(w>>21))^(tmp^(tmp>>4))) & 31) << lg_fptf; 
         for (int i = 0; i < fpt; i++) {
-            int tmp=(x^(x<<15)); x=y; y=z; z=w;  
+            tmp=(x^(x<<15)); x=y; y=z; z=w;  
             w=(w^(w>>21))^(tmp^(tmp>>4)); 
         }
     }
-    //R[blockIdx.x * blockDim.x + threadIdx.x] = w;
 } 
 
-static inline void launchKernel(void* kernelFunc, int *d_R, int fpt, int tb, int tpb) {
+static inline void launchKernel(void* kernelFunc, int *d_R, int lg_fptf, int tb, int tpb) {
     dim3 gridDim(tb);
     dim3 blockDim(tpb);
-    void *args[] = {(void*)&d_R, (void*)&fpt};
+    void *args[] = {(void*)&d_R, (void*)&lg_fptf};
     cudaLaunchCooperativeKernel(kernelFunc, gridDim, blockDim, args);
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
@@ -59,11 +59,11 @@ static inline void launchKernel(void* kernelFunc, int *d_R, int fpt, int tb, int
 
 int main(int argc, char **argv)
 {
-    assert((argc == 3) && "Need number of fibers and number of threads.");
+    assert((argc == 3) && "Need log2(factor to multiply number of fibers) and number of threads.");
 
-    int fpt = atoi(argv[1]);
+    int lg_fptf = atoi(argv[1]);
     int tt = atoi(argv[2]);
-    std::cerr << "# fibers per thread: " << fpt << "\n# threads: " << tt << std::endl;
+    std::cerr << "# max fibers per thread: " << 31*(1<<lg_fptf) << "\n# threads: " << tt << std::endl;
 
     // Error code to check return values for CUDA calls
     cudaError_t err = cudaSuccess;
@@ -97,22 +97,18 @@ int main(int argc, char **argv)
     float sync_ms = 0;
     float nosync_ms = 0;
 
-
-    /*
     cudaEventRecord(start);
-    launchKernel((void*)xorShift, d_R, fpt, tb, tpb);
+    launchKernel((void*)xorShift, d_R, lg_fptf, tb, tpb);
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&sync_ms, start, stop);
-    */
     
     cudaEventRecord(start);
-    launchKernel((void*)xorShiftNoSync, d_R, fpt, tb, tpb);
+    launchKernel((void*)xorShiftNoSync, d_R, lg_fptf, tb, tpb);
     cudaDeviceSynchronize();
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&nosync_ms, start, stop);
-
 
     std::cout << nosync_ms << "," << sync_ms << std::endl;
     // print 'efficiency'
