@@ -1,0 +1,7 @@
+{
+    "cmake.sourceDirectory": "C:/Users/panther/work/parendi-gpu-exp/",
+    "files.associations": {
+        "barrier": "cpp"
+    },
+    "terminal.integrated.defaultProfile.windows": "MSYS2 (MSVC)",
+}

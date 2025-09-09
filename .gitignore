@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 \#*
 .#*
 .gdb_history
@@ -55,3 +56,7 @@ xrun.history
 =======
 build/
 >>>>>>> ac7b0e047 (initial commit)
+=======
+build/
+.cache
+>>>>>>> 5fba10e06 (cleanup cmakelists)
