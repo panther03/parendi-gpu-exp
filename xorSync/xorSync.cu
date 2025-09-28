@@ -6,7 +6,6 @@
 #include <stdio.h>
 #include <cuda/barrier>
 
-#define ITERS 1000000
 #define THREADS_PER_BLOCK 32
 
 namespace cg = cooperative_groups;
@@ -17,7 +16,8 @@ __global__ void xorShift(int *R, int lg_fptf) {
     int z = threadIdx.x + 1;
     cg::grid_group g = cg::this_grid();
     volatile int w = blockDim.x - threadIdx.x;
-    for (int j = 0; j < ITERS; j++) {
+    int iters = 1 << (16 - lg_fptf);
+    for (int j = 0; j < iters; j++) {
         int tmp=(x^(x<<15));  
         int fpt=(((w^(w>>21))^(tmp^(tmp>>4))) & 31) << lg_fptf; 
         for (int i = 0; i < fpt; i++) {
@@ -32,9 +32,10 @@ __global__ void xorShiftNoSync(int *R, int lg_fptf) {
     int x = threadIdx.x;
     int y = blockIdx.x;
     int z = threadIdx.x + 1;
-    volatile uint32_t w = blockDim.x - threadIdx.x;
-    for (int j = 0; j < ITERS; j++) {
-        int tmp=(x^(x<<15));
+    volatile int w = blockDim.x - threadIdx.x;
+    int iters = 1 << (16 - lg_fptf);
+    for (int j = 0; j < iters; j++) {
+        int tmp=(x^(x<<15));  
         int fpt=(((w^(w>>21))^(tmp^(tmp>>4))) & 31) << lg_fptf; 
         for (int i = 0; i < fpt; i++) {
             tmp=(x^(x<<15)); x=y; y=z; z=w;  
