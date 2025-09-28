@@ -7,41 +7,40 @@
 #include <cuda/barrier>
 
 #define ITERS 1000000
-#define THREADS_PER_BLOCK 1024
+#define THREADS_PER_BLOCK 32 // this is needed i think
 #ifndef COMM_BYTES
 #define COMM_BYTES 8
 #endif
 
-struct commStruct {
-    uint8_t data[COMM_BYTES];
-};
+#define unit_t uint32_t
+#define COMM_UNITS (COMM_BYTES/sizeof(unit_t))
+#define CACHE_LINE_BYTES 128
+#define UNITS_PER_CACHE_LINE (CACHE_LINE_BYTES/sizeof(COMM_UNITS))
 
 namespace cg = cooperative_groups;
 
-__global__ void tCommTest(commStruct *R, int tt) {
-    int t = blockIdx.x * blockDim.x + threadIdx.x;
-    int m = tt/2;
-    //cg::grid_group g = cg::this_grid();
+__global__ void tCommTest(unit_t *R, int tt) {
+    int b = blockIdx.x;
+    int m = gridDim.x / 2;
+    cg::grid_group g = cg::this_grid();
     int i = 0;
     while (i < ITERS) {
-        // (Empty) computation
-        // Full communication costs will be realized here as the access is going to miss.
-        commStruct val = R[t];
-        //g.sync();
-        __syncthreads();
-        // Communication
-        if (t > m) {
-            R[t-m] = val;
-        } else {
-            R[t+m] = val; 
+        unit_t val[COMM_UNITS];
+        for (int i = 0; i < COMM_UNITS; i++) {
+            val[i] = R[(COMM_UNITS*b+i)*32+threadIdx.x];
         }
-        //g.sync();
-        __syncthreads();
+        g.sync();
+        // Communication
+        int bd = (b > m) ? b-m : b+m;
+        for (int i = 0; i < COMM_UNITS; i++) {
+            R[(COMM_UNITS*bd+i)*32+threadIdx.x] = val[i];
+        }
+        g.sync();
         i++;
     }
 } 
 
-static inline void launchKernel(void* kernelFunc, commStruct *d_R, int tb, int tpb) {
+static inline void launchKernel(void* kernelFunc, unit_t *d_R, int tb, int tpb) {
     dim3 gridDim(tb);
     dim3 blockDim(tpb);
     int tt = tb * tpb;
@@ -69,10 +68,10 @@ int main(int argc, char **argv)
     // Error code to check return values for CUDA calls
     cudaError_t err = cudaSuccess;
 
-    size_t size = tt * sizeof(commStruct);
+    size_t size = tt * COMM_BYTES;
 
     // Allocate the device output vector C
-    commStruct *d_R = NULL;
+    unit_t *d_R = NULL;
     err        = cudaMalloc((void **)&d_R, size);
     
     // Allocate the host input vector A
@@ -98,8 +97,8 @@ int main(int argc, char **argv)
     float tcomm_ms = 0;
 
     cudaEventRecord(start);
-    //launchKernel((void*)tCommTest, d_R, tb, tpb);
-    tCommTest<<<tb,tpb>>>(d_R,tt);
+    launchKernel((void*)tCommTest, d_R, tb, tpb);
+    //tCommTest<<<tb,tpb>>>(d_R,tt);
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&tcomm_ms, start, stop);
