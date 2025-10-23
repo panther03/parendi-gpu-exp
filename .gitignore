@@ -40,6 +40,9 @@ verilator-config-version.cmake
 **/__pycache__/*
 **/_build/*
 **/obj_dir/*
+**/obj_dir*
 /.vscode/
 build
 temp
+.cache/
+junk/

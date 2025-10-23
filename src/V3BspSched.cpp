@@ -202,10 +202,10 @@ buildDepGraphs(AstNetlist* netlistp) {
 
 void schedule(AstNetlist* netlistp) {
 
-    if (dumpTree() >= 3) {
+    /*if (dumpTree() >= 3) {
         UINFO(0, "Emitting verilog\n");
         V3EmitV::debugEmitV(v3Global.debugFilename("pre-bsp") + ".v");
-    }
+    }*/
     if (v3Global.opt.fIpuRetime()) {
         Retiming::retimeAll(netlistp);
         // V3Stats::statsStage("bspRetime");

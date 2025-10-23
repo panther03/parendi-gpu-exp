@@ -50,6 +50,7 @@
 #include "V3EmitCMake.h"
 #include "V3EmitMk.h"
 #include "V3EmitPoplar.h"
+#include "V3EmitCuda.h"
 #include "V3EmitV.h"
 #include "V3EmitXml.h"
 #include "V3Expand.h"
@@ -462,7 +463,7 @@ static void process() {
         if (v3Global.opt.stats()) V3Stats::statsStageAll(v3Global.rootp(), "Scoped");
     }
 
-    if (v3Global.opt.poplar()) {
+    /*if (v3Global.opt.poplar()) {
         // requires scopes
         if (v3Global.opt.fIpuDiffExchnage()) {
             // optimize the exchange of unpack variables by only sending the diffs
@@ -472,7 +473,7 @@ static void process() {
 
         // create a poplar program
         V3BspPoplarProgram::createProgram(v3Global.rootp());
-    }
+    }*/
     // --MODULE OPTIMIZATIONS--------------
     if (!v3Global.opt.xmlOnly()) {
         // Split deep blocks to appease MSVC++.  Must be before Localize.
@@ -556,9 +557,9 @@ static void process() {
     }
 
     V3Error::abortIfErrors();
-    if (!v3Global.opt.lintOnly() && !v3Global.opt.xmlOnly() && !v3Global.opt.poplar()) {  //
+    /*if (!v3Global.opt.lintOnly() && !v3Global.opt.xmlOnly() && !v3Global.opt.poplar()) {  //
         V3CCtors::cctorsAll();
-    }
+    }*/
 
     if (!v3Global.opt.xmlOnly() && v3Global.opt.mtasks()) {
         // Finalize our MTask cost estimates and pack the mtasks into
@@ -580,7 +581,7 @@ static void process() {
     }
 
     // Output the text
-    if (v3Global.opt.poplar()) {
+    if (0) { // v3Global.opt.poplar()
         V3EmitC::emitcConstPool();
         V3EmitPoplar::emitStructs();
         V3EmitPoplar::emitProgram();
@@ -590,7 +591,7 @@ static void process() {
         V3BspStraggler::report();
         reportStatsIfEnabled();
     } else {
-        if (!v3Global.opt.lintOnly() && !v3Global.opt.xmlOnly() && !v3Global.opt.dpiHdrOnly()) {
+        if (!v3Global.opt.lintOnly() && !v3Global.opt.xmlOnly() && !v3Global.opt.dpiHdrOnly()) { 
             // emitcInlines is first, as it may set needHInlines which other emitters read
             V3EmitC::emitcInlines();
             V3EmitC::emitcSyms();
@@ -604,6 +605,7 @@ static void process() {
             && !v3Global.opt
                     .dpiHdrOnly()) {  // Unfortunately we have some lint checks in emitcImp.
             V3EmitC::emitcImp();
+            V3EmitCuda::emitTile();
         }
         if (v3Global.opt.xmlOnly()
             // Check XML when debugging to make sure no missing node types

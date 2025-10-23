@@ -23,6 +23,7 @@
 #include "V3AstUserAllocator.h"
 #include "V3BspGraph.h"
 #include "V3InstrCount.h"
+#include "V3Number.h"
 #include "V3Stats.h"
 #include "V3UniqueNames.h"
 
@@ -318,6 +319,8 @@ private:
     const V3Sched::LogicByScope m_initials;
     const V3Sched::LogicByScope m_initialStatics;
     const V3Sched::LogicByScope m_actives;
+    std::unordered_map<AstClass*,AstCFunc*> m_storeGlobalFns;
+    std::unordered_map<AstClass*,AstCFunc*> m_exchangeFns;
 
     AstModule* m_topModp = nullptr;
     AstPackage* m_packagep = nullptr;
@@ -655,6 +658,7 @@ private:
         trigEvalFuncp->isMethod(true);
         trigEvalFuncp->isInline(true);
         trigEvalFuncp->dontCombine(true);
+        trigEvalFuncp->isDevice(true);
         scopep->addBlocksp(trigEvalFuncp);
         // create the a function that sets the triggers, for this we first need
         // to gather all the different SenTrees that could cause an activation
@@ -913,6 +917,33 @@ private:
         }
     }
 
+    static auto makeCopyOp (const std::pair<AstVarScope*, AstVar*>& sourcep,
+                            const std::pair<AstVarScope*, AstVar*>& targetp) {
+        AstVarScope* targetInstp = targetp.first;
+        AstVar* targetVarp = targetp.second;
+        AstVarScope* sourceInstp = sourcep.first;
+        AstVar* sourceVarp = sourcep.second;
+        UASSERT(targetInstp && targetVarp && sourceInstp && sourceVarp,
+                "should not be null");
+        // create an assignment from target = source
+        FileLine* fl = targetInstp->fileline();
+        AstMemberSel* const targetSelp
+            = new AstMemberSel{fl, new AstVarRef{fl, targetInstp, VAccess::WRITE},
+                                VFlagChildDType{}, targetVarp->name()
+
+            };
+        // resolve the dtype manually
+        targetSelp->varp(targetVarp);
+        targetSelp->dtypep(targetVarp->dtypep());
+        AstMemberSel* const sourceSelp
+            = new AstMemberSel{fl, new AstVarRef{fl, sourceInstp, VAccess::READ},
+                                VFlagChildDType{}, sourceVarp->name()};
+        sourceSelp->varp(sourceVarp);
+        sourceSelp->dtypep(sourceVarp->dtypep());
+        AstAssign* const assignp = new AstAssign{fl, targetSelp, sourceSelp};
+        return assignp;
+    };
+
     /// @brief create a class for the given partiton
     /// @param graphp
     /// @return
@@ -963,6 +994,7 @@ private:
         nbaTopp->isMethod(true);
         nbaTopp->isInline(true);
         nbaTopp->dontCombine(true);
+        nbaTopp->isDevice(true);
         // add the function arg
 
         AstVar* const trigArgp
@@ -974,6 +1006,15 @@ private:
         scopep->addVarsp(thisTrigVscp);
 
         scopep->addBlocksp(nbaTopp);
+
+        AstCFunc* storeGlobalp = new AstCFunc{fl, "storeGlobal", scopep, "void"};
+        storeGlobalp->isMethod(true);
+        storeGlobalp->isInline(true);
+        storeGlobalp->dontCombine(true);
+        storeGlobalp->isDevice(true);
+        m_storeGlobalFns[classp]=storeGlobalp;
+
+        scopep->addBlocksp(storeGlobalp);
 
         // create class member or function local variable for every variable neeeded
         // by the graphp computations
@@ -1104,7 +1145,6 @@ private:
             }
         });
     }
-
     // make a top level module with a single "exchange" function that emulates "AssignPost"
     void makeCopyOperations() {
         // AstVarScope::user2 -> true if variable already processed
@@ -1121,44 +1161,16 @@ private:
 
         initFuncp->slow(true);
         initFuncp->dontCombine(true);
-        // go through all of the old variables and find their new producer and consumers
-        // then create a assignments for updating them safely in an "exchange" function.
-        // initialization (AstInitial and AstInitialStatic) also get a similar treatment
-        // since there is an individual class that performs the initial computation
-        // and that needs to be copied as well.
-        m_netlistp->foreach([this, &copyFuncp, &initFuncp](AstVarScope* vscp) {
-            auto makeCopyOp = [](const std::pair<AstVarScope*, AstVar*>& sourcep,
-                                 const std::pair<AstVarScope*, AstVar*>& targetp) {
-                AstVarScope* targetInstp = targetp.first;
-                AstVar* targetVarp = targetp.second;
-                AstVarScope* sourceInstp = sourcep.first;
-                AstVar* sourceVarp = sourcep.second;
-                UASSERT(targetInstp && targetVarp && sourceInstp && sourceVarp,
-                        "should not be null");
-                // create an assignment from target = source
-                FileLine* fl = targetInstp->fileline();
-                AstMemberSel* const targetSelp
-                    = new AstMemberSel{fl, new AstVarRef{fl, targetInstp, VAccess::WRITE},
-                                       VFlagChildDType{}, targetVarp->name()
 
-                    };
-                // resolve the dtype manually
-                targetSelp->varp(targetVarp);
-                targetSelp->dtypep(targetVarp->dtypep());
-                AstMemberSel* const sourceSelp
-                    = new AstMemberSel{fl, new AstVarRef{fl, sourceInstp, VAccess::READ},
-                                       VFlagChildDType{}, sourceVarp->name()};
-                sourceSelp->varp(sourceVarp);
-                sourceSelp->dtypep(sourceVarp->dtypep());
-                AstAssign* const assignp = new AstAssign{fl, targetSelp, sourceSelp};
-                return assignp;
-            };
+         m_netlistp->foreach([this, &copyFuncp, &initFuncp](AstVarScope* vscp) {
+            
             if (vscp->user2()) { /*already processed*/
                 return;
             }
             vscp->user2(true);
             UINFO(400, "Insepcting " << vscp->name() << endl);
             auto& refInfo = m_vscpRefs(vscp);
+
             // UASSERT_OBJ(!refInfo.hasConsumer()
             //                 || refInfo.producer() /* consumed implies produced*/,
             //             vscp, "consumed but not produced!");
@@ -1170,13 +1182,16 @@ private:
                 if (refInfo.sourcep().first
                     && refInfo.sourcep() != pair /*no need to send to self*/) {
                     // UASSERT(refInfo.sourcep() != pair, "Self message not allowed!");
-                    copyFuncp->addStmtsp(makeCopyOp(refInfo.sourcep(), pair));
+                    AstClassRefDType *dt = (AstClassRefDType*) refInfo.sourcep().first->dtypep();
+                    UASSERT(m_storeGlobalFns.find(dt->classp()) != m_storeGlobalFns.end(), "unknown class for exchange variable");
+                    m_storeGlobalFns[dt->classp()]->addStmtsp(makeCopyOp(refInfo.sourcep(), pair));
                 }
                 if (refInfo.initp().first) {
                     initFuncp->addStmtsp(makeCopyOp(refInfo.initp(), pair));
                 }
             }
         });
+
         m_topScopep->addBlocksp(copyFuncp);
         m_topScopep->addBlocksp(initFuncp);
 
@@ -1406,13 +1421,13 @@ public:
         makeComputeSet({initClassp}, "initComputeSet");
         makeComputeSet(submodp, "computeSet");
         // 4. add the classes
-        m_netlistp->addModulesp(m_packagep);
+        //m_netlistp->addModulesp(m_packagep);
 
-        m_netlistp->addModulesp(m_classWithComputep);
-        m_netlistp->addModulesp(m_classWithComputep->classOrPackagep());
+        //m_netlistp->addModulesp(m_classWithComputep);
+        //m_netlistp->addModulesp(m_classWithComputep->classOrPackagep());
 
-        m_netlistp->addModulesp(m_classWithInitp);
-        m_netlistp->addModulesp(m_classWithInitp->classOrPackagep());
+        //m_netlistp->addModulesp(m_classWithInitp);
+        //m_netlistp->addModulesp(m_classWithInitp->classOrPackagep());
 
         for (AstClass* clsp : submodp) {
             m_netlistp->addModulesp(clsp);

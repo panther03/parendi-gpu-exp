@@ -1,0 +1,2 @@
+#!/bin/bash
+rm -rf build && cmake --fresh -B build -DCMAKE_BUILD_TYPE=Debug --install-prefix $HOME/.local/opt/verilator_parendi_ipu -DCMAKE_LINKER_TYPE=MOLD -DCMAKE_CXX_COMPILER=clang++-20 -DCMAKE_CXX_FLAGS="-std=gnu++17" -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=NONE

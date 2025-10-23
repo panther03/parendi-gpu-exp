@@ -261,6 +261,7 @@ set(COMMON_SOURCES
     V3EmitPoplarProgram.cpp
     V3EmitPoplarStructs.cpp
     V3EmitPoplarVertex.cpp
+    V3EmitCudaTile.cpp
     V3EmitMk.cpp
     V3EmitV.cpp
     V3EmitXml.cpp

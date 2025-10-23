@@ -574,6 +574,7 @@ private:
     bool m_dpiImportPrototype : 1;  // This is the DPI import prototype (i.e.: provided by user)
     bool m_dpiImportWrapper : 1;  // Wrapper for invoking DPI import prototype from generated code
     bool m_dpiTraceInit : 1;  // DPI trace_init
+    bool m_isDevice : 1; // CUDA device function
 public:
     AstCFunc(FileLine* fl, const string& name, AstScope* scopep, const string& rtnType = "")
         : ASTGEN_SUPER_CFunc(fl) {
@@ -601,6 +602,7 @@ public:
         m_dpiImportPrototype = false;
         m_dpiImportWrapper = false;
         m_dpiTraceInit = false;
+        m_isDevice = false;
     }
     ASTGEN_MEMBERS_AstCFunc;
     string name() const override { return m_name; }
@@ -678,6 +680,8 @@ public:
     void dpiTraceInit(bool flag) { m_dpiTraceInit = flag; }
     bool dpiTraceInit() const { return m_dpiTraceInit; }
     bool isCoroutine() const { return m_rtnType == "VlCoroutine"; }
+    bool isDevice() const { return m_isDevice; }
+    void isDevice(bool flag) { m_isDevice = flag; }
     // Special methods
     bool emptyBody() const {
         return argsp() == nullptr && initsp() == nullptr && stmtsp() == nullptr
