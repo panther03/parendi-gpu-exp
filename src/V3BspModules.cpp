@@ -935,7 +935,7 @@ private:
         // resolve the dtype manually
         targetSelp->varp(targetVarp);
         targetSelp->dtypep(targetVarp->dtypep());
-        AstMemberSel* const sourceSelp
+        AstMemberSel* const sourceSelp 
             = new AstMemberSel{fl, new AstVarRef{fl, sourceInstp, VAccess::READ},
                                 VFlagChildDType{}, sourceVarp->name()};
         sourceSelp->varp(sourceVarp);

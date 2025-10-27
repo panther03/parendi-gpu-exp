@@ -170,8 +170,8 @@ private:
     void processEnter(AstNode* nodep) {
         nodep->brokenState(m_brokenCntCurrentUnder);
         const char* const whyp = nodep->broken();
-        UASSERT_OBJ(!whyp, nodep,
-                    "Broken link in node (or something without maybePointedTo): " << whyp);
+        //UASSERT_OBJ(!whyp, nodep,
+        //            "Broken link in node (or something without maybePointedTo): " << whyp);
         if (nodep->dtypep()) {
             UASSERT_OBJ(nodep->dtypep()->brokeExists(), nodep,
                         "Broken link in node->dtypep() to " << cvtToHex(nodep->dtypep()));

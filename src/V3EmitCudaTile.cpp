@@ -211,7 +211,7 @@ public:
         }
     }*/
 };
-void V3EmitCuda::emitTile() {
+void V3EmitCuda::() {
     // Make parent module pointers available, enables user4
     const EmitCParentModule emitCParentModule;
     AstNetlist* netlistp = v3Global.rootp();

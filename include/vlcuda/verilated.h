@@ -34,6 +34,13 @@
 #include "verilated_config.h"
 #include <stdint.h>
 
+// in place of having a "verilatedos" for now
+#define VL_INLINE_OPT __device__ inline
+#define VL_DBG_MSGF
+#define VL_DEBUG_IF 
+#define VL_UNLIKELY(x) x
+#define VL_FINISH_MT // TODO: implement DPI call
+
 //=========================================================================
 // Basic types
 

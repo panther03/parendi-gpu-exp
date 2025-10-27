@@ -36,6 +36,8 @@ using state_update_fn_t = void(*)(void*,void*);
 
 #define ITERS 500 // placeholder until dpi is working
 
+// TODO snippet of using function pointers
+// use switch case instead
 __global__ void gpuSimulate(void *topState, state_update_fn_t *compLut, state_update_fn_t *xchgLoadLut) {
     extern __shared__ void* localState;
     cg::grid_group g = cg::this_grid();
@@ -49,11 +51,11 @@ __global__ void gpuSimulate(void *topState, state_update_fn_t *compLut, state_up
 
 template <typename Derived, typename TopStateTy>
 class VBspCudaTileCls {
-    private:
+private:
     __device__ inline void compute(TopStateTy *topState);
     __device__ inline void exchangeLoad(TopStateTy *topState);
     // __device__ inline void exchangeStore(TopStateTy *topState);
-    public:
+public:
     static __device__ __noinline__ computeWrap(void* topState, void *localState) {
         ((Derived*)localState)->compute((TopStateTy*)topState);
     }
@@ -66,37 +68,37 @@ class VBspCudaTileCls {
 
 template <typename Derived, typename TopStateTy, typename ...Tiles>
 class VBspCudaRootCls {
-    private:
+private:
     static const std::size_t numTiles = sizeof...(Tiles);
     static const state_update_fn_t *h_compLut = {&Tiles::computeWrap...};
-    static const state_update_fn_t *h_xchgLoadLut = {&Tiles::xchgLoadLut...};
+    static const state_update_fn_t *h_xchgLoadLut = {&Tiles::exchangeLoadWrap...};
     __device__ state_update_fn_t *d_compLut = nullptr;
     __device__ state_update_fn_t *d_xchgLoadLut = nullptr;
 
-    public:
+public:
     TopStateTy *h_topState; // add to constructor ??
     __device__ TopStateTy *d_topState = nullptr;
 
-    private: 
-
-    void initCompute(); 
+private:
+    // void initCompute(); 
     // implemented by verilator code 
-    // it could be implemented at the TopStateTy level... hmm...
+    // could be implemented here but i think better to have it in the TopStateTy
 
     void gpuInitialize() {
-        // TODO
-        //d_compLut = cudaMalloc(...);
-        //d_xchgLoadLut = cudaMalloc(...);
-        // ....
+        size_t lutSz = numTiles * sizeof(state_update_fn_t);
+        cudaMalloc((void**)&d_compLut, lutSz);
+        cudaMalloc((void**)&d_xchgLoadLut, lutSz);
+        cudaMemcpy(h_compLut, d_compLut, lutSz, cudaMemcpyHostToDevice);
+        cudaMemcpy(h_xchgLoadLut, d_xchgLoadLut, lutSz, cudaMemcpyHostToDevice);
 
-        // copy it over
-        // cudaMemcpy(...)
+        cudaMalloc((void**)&d_topState, sizeof(TopStateTy));
+        cudaMemcpy(h_topState, d_topState, sizeof(TopStateTy), cudaMemcpyHostToDevice);
     }
 
-    public:
+public:
 
     void initialize() {
-        ((Derived*)this)->initCompute();
+        h_topState->initCompute();
         gpuInitialize();
     }
 

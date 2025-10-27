@@ -150,25 +150,25 @@ private:
 
 public:
     // CONSTRUCTOR
-    VlTriggerVec() { clear(); }
-    ~VlTriggerVec() = default;
+    __device__ VlTriggerVec() { clear(); }
+    __device__  ~VlTriggerVec() = default;
 
     // METHODS
 
     // Set all elements to false
-    void clear() { m_flags.fill(false); }
+    __device__  void clear() { m_flags.fill(false); }
 
-    bool at(size_t index) const { return m_flags.at(index); }
+    __device__  bool at(size_t index) const { return m_flags.at(index); }
 
     // Return true iff at least one element is set
-    bool any() const {
+    __device__  bool any() const {
         for (size_t i = 0; i < m_flags.size(); ++i)
             if (m_flags[i]) return true;
         return false;
     }
-    bool empty() const { return !any(); }
+    __device__  bool empty() const { return !any(); }
 
-    void set(uint32_t index, bool value) { m_flags[index] = value; }
+    __device__  void set(uint32_t index, bool value) { m_flags[index] = value; }
 };
 
 
